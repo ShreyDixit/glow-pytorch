@@ -1,5 +1,6 @@
-from .datasets import CelebADataset
+from .datasets import CelebADataset, MNISTDataset
 
 Datasets = {
-    "celeba": CelebADataset
+    "celeba": CelebADataset,
+    "mnist": MNISTDataset,
 }
