@@ -187,8 +187,8 @@ class Glow(nn.Module):
             self.learn_top = modules.Conv2dZeros(C * 2, C * 2)
         if hparams.Glow.y_condition:
             C = self.flow.output_shapes[-1][1]
-            self.project_ycond = modules.LinearZeros(
-                hparams.Glow.y_classes, 2 * C)
+            print(C)
+            self.project_ycond = nn.Embedding(self.y_classes, 2 * C)
             self.project_class = modules.LinearZeros(
                 C, hparams.Glow.y_classes)
         # register prior hidden
@@ -201,6 +201,25 @@ class Glow(nn.Module):
                                       self.flow.output_shapes[-1][2],
                                       self.flow.output_shapes[-1][3]])))
 
+    @torch.no_grad()
+    def add_classes(self, n):
+        self.add_embedding_ycond(n)
+        self.add_neurons_ycond(n)
+        self.y_classes += n
+
+    def add_neurons_ycond(self, n):
+        additional_weight = torch.zeros(n, self.project_class.weight.shape[1]) + self.project_class.weight.mean()
+        additional_bias = torch.zeros(n) + self.project_class.bias.mean()
+        additional_logs = torch.zeros(n) + self.project_class.logs.mean()
+
+        self.project_class.weight = nn.Parameter(torch.cat((self.project_class.weight, additional_weight)))
+        self.project_class.bias = nn.Parameter(torch.cat((self.project_class.bias, additional_bias)))
+        self.project_class.logs = nn.Parameter(torch.cat((self.project_class.logs, additional_logs)))
+
+    def add_embedding_ycond(self, n):
+        weights = torch.cat((self.project_ycond.weight, torch.normal(0, 1, (n, self.project_ycond.weight.shape[1]))))
+        self.project_ycond = nn.Embedding.from_pretrained(weights, freeze=False)
+
     def prior(self, y_onehot=None):
         B, C = self.prior_h.size(0), self.prior_h.size(1)
         h = self.prior_h.detach().clone()
@@ -209,7 +228,8 @@ class Glow(nn.Module):
             h = self.learn_top(h)
         if self.hparams.Glow.y_condition:
             assert y_onehot is not None
-            yp = self.project_ycond(y_onehot).view(B, C, 1, 1)
+            print(y_onehot.argmax(dim=1))
+            yp = self.project_ycond(y_onehot.argmax(dim=1)).view(B, C, 1, 1)
             h += yp
         return thops.split_feature(h, "split")
 
