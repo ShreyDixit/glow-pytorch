@@ -7,6 +7,7 @@ from . import thops
 from . import modules
 from . import utils
 
+from torchvision.models import resnet18
 
 def f(in_channels, out_channels, hidden_channels):
     return nn.Sequential(
@@ -156,8 +157,21 @@ class FlowNet(nn.Module):
             z, logdet = layer(z, logdet, reverse=False)
         return z, logdet
 
+    def encode_intermediate(self, z, logdet=0.0):
+        for layer, shape in zip(self.layers[:-self.K - 1], self.output_shapes[:-self.K - 1]):
+            z, logdet = layer(z, logdet, reverse=False)
+        return z, logdet
+
     def decode(self, z, eps_std=None):
         for layer in reversed(self.layers):
+            if isinstance(layer, modules.Split2d):
+                z, logdet = layer(z, logdet=0, reverse=True, eps_std=eps_std)
+            else:
+                z, logdet = layer(z, logdet=0, reverse=True)
+        return z
+
+    def decode_intermediate(self, z, eps_std=None):
+        for layer in reversed(self.layers[:self.K + 1]):
             if isinstance(layer, modules.Split2d):
                 z, logdet = layer(z, logdet=0, reverse=True, eps_std=eps_std)
             else:
@@ -261,6 +275,25 @@ class Glow(nn.Module):
         nll = (-objective) / float(np.log(2.) * pixels)
         return z, nll, y_logits
 
+    def image_to_intermediate(self, x):
+        pixels = thops.pixels(x)
+        z = x + torch.normal(mean=torch.zeros_like(x),
+                             std=torch.ones_like(x) * (1. / 256.))
+        logdet = torch.zeros_like(x[:, 0, 0, 0])
+        logdet += float(-np.log(256.) * pixels)
+        # encode
+        z, objective = self.flow.encode_intermediate(z, logdet=logdet)
+        nll = (-objective) / float(np.log(2.) * pixels)
+        return z, nll
+
+    def z_to_intermediate(self, z, y_onehot, eps_std):
+        with torch.no_grad():
+            mean, logs = self.prior(y_onehot)
+            if z is None:
+                z = modules.GaussianDiag.sample(mean, logs, eps_std)
+            x = self.flow.decode_intermediate(z, eps_std=eps_std)
+        return x
+
     def reverse_flow(self, z, y_onehot, eps_std):
         with torch.no_grad():
             mean, logs = self.prior(y_onehot)
@@ -340,3 +373,32 @@ class Glow(nn.Module):
             return 0
         else:
             return Glow.CE(y_logits, y.long())
+
+class BioGlowReplay(nn.Module):
+    def BioGlowReplay(self, hparams):
+        super().__init__()
+        self.Glow = Glow(hparams)
+
+        self.n_classes = hparams.Glow.y_classes
+        self.intermediate_channels = self.Glow.flow.output_shapes[-self.Glow.flow.K-2]
+        
+        self.classifier = resnet18(pre_trained=True)
+        self.classifier.fc = nn.Linear(2048, self.n_classes)
+        self.classifier.conv1 = nn.Conv2d(self.intermediate_channels, 64, kernel_size=(1, 1), padding=(5, 5), bias=False)
+
+    def forward(self, x):
+        intermediate, nll = self.Glow.image_to_intermediate(x)
+        return self.classifier(intermediate), nll
+
+    def image_to_z(self, x, y_onehot):
+        return self.Glow.normal_flow(x, y_onehot)
+
+    def image_to_intermediate(self, x):
+        return self.Glow.image_to_intermediate(x)
+
+    def z_to_intermediate(self, z, y_onehot, eps_std):
+        return self.Glow.z_to_intermediate(z, y_onehot, eps_std)
+
+    def intermediate_to_class(self, intermediate):
+        return self.classifier(intermediate)
+        
