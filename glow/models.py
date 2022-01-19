@@ -375,14 +375,14 @@ class Glow(nn.Module):
             return Glow.CE(y_logits, y.long())
 
 class BioGlowReplay(nn.Module):
-    def BioGlowReplay(self, hparams):
+    def __init__(self, hparams):
         super().__init__()
         self.Glow = Glow(hparams)
 
         self.n_classes = hparams.Glow.y_classes
-        self.intermediate_channels = self.Glow.flow.output_shapes[-self.Glow.flow.K-2]
-        
-        self.classifier = resnet18(pre_trained=True)
+        self.intermediate_channels = self.Glow.flow.output_shapes[-self.Glow.flow.K-2][1]
+
+        self.classifier = resnet18(pretrained=True)
         self.classifier.fc = nn.Linear(2048, self.n_classes)
         self.classifier.conv1 = nn.Conv2d(self.intermediate_channels, 64, kernel_size=(1, 1), padding=(5, 5), bias=False)
 
