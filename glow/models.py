@@ -401,4 +401,15 @@ class BioGlowReplay(nn.Module):
 
     def intermediate_to_class(self, intermediate):
         return self.classifier(intermediate)
-        
+
+    def add_classes(self, n):
+        self.Glow.add_classes(n)
+        self.add_neurons_fc(n)
+
+    def add_neurons_fc(self, n):
+        additional_weight = torch.zeros(n, self.classifier.fc.weight.shape[1]) + self.classifier.fc.weight.mean()
+        additional_bias = torch.zeros(n) + self.classifier.fc.bias.mean()
+
+        self.classifier.fc.weight = nn.Parameter(torch.cat((self.classifier.fc.weight, additional_weight)))
+        self.classifier.fc.bias = nn.Parameter(torch.cat((self.classifier.fc.bias, additional_bias)))    
+    
