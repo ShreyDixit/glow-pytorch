@@ -171,7 +171,7 @@ class FlowNet(nn.Module):
         return z
 
     def decode_intermediate(self, z, eps_std=None):
-        for layer in reversed(self.layers[:self.K + 1]):
+        for layer in reversed(self.layers[-self.K - 1:]):
             if isinstance(layer, modules.Split2d):
                 z, logdet = layer(z, logdet=0, reverse=True, eps_std=eps_std)
             else:
@@ -201,7 +201,6 @@ class Glow(nn.Module):
             self.learn_top = modules.Conv2dZeros(C * 2, C * 2)
         if hparams.Glow.y_condition:
             C = self.flow.output_shapes[-1][1]
-            print(C)
             self.project_ycond = nn.Embedding(self.y_classes, 2 * C)
             self.project_class = modules.LinearZeros(
                 C, hparams.Glow.y_classes)
@@ -242,9 +241,8 @@ class Glow(nn.Module):
             h = self.learn_top(h)
         if self.hparams.Glow.y_condition:
             assert y_onehot is not None
-            print(y_onehot.argmax(dim=1))
-            yp = self.project_ycond(y_onehot.argmax(dim=1)).view(B, C, 1, 1)
-            h += yp
+            yp = self.project_ycond(y_onehot.argmax(dim=1)).view(-1, C, 1, 1)
+            h = yp+h if yp.shape[0]==h.shape[0] else yp
         return thops.split_feature(h, "split")
 
     def forward(self, x=None, y_onehot=None, z=None,
@@ -387,7 +385,8 @@ class BioGlowReplay(nn.Module):
         self.classifier.conv1 = nn.Conv2d(self.intermediate_channels, 64, kernel_size=(1, 1), padding=(5, 5), bias=False)
 
     def forward(self, x):
-        intermediate, nll = self.Glow.image_to_intermediate(x)
+        with torch.no_grad():
+            intermediate, nll = self.Glow.image_to_intermediate(x)
         return self.classifier(intermediate), nll
 
     def image_to_z(self, x, y_onehot):
@@ -402,6 +401,7 @@ class BioGlowReplay(nn.Module):
     def intermediate_to_class(self, intermediate):
         return self.classifier(intermediate)
 
+    @torch.no_grad()
     def add_classes(self, n):
         self.Glow.add_classes(n)
         self.add_neurons_fc(n)

@@ -7,6 +7,19 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from shutil import copyfile
+from torch.utils.data import Dataset
+
+
+class MergeOldNewDS(Dataset):
+    def __init__(self, *datasets):
+        assert len(datasets[0]) == len(datasets[1])
+        self.datasets = datasets
+    
+    def __len__(self):
+        return len(self.datasets[0])
+
+    def __getitem__(self, index):
+        return tuple(ds[index] for ds in self.datasets)
 
 
 def get_proper_cuda_device(device, verbose=True):
