@@ -106,8 +106,10 @@ class Trainer(object):
                 for i_batch, (batch, batch_old) in enumerate(progress):
                     x, y, y_onehot = self.prepare_training(batch)
                     out_prob, nll = self.graph(x)
-                    out_prob_old, nll_old = self.graph.intermediate_to_class(batch_old[0])
-                    loss = Glow.loss_multi_classes(out_prob, y_onehot) + Glow.loss_multi_classes(out_prob_old, batch_old[1])
+                    loss = Glow.loss_multi_classes(out_prob, y_onehot)
+                    if stage>0:
+                        out_prob_old, nll_old = self.graph.intermediate_to_class(batch_old[0])
+                        loss += Glow.loss_multi_classes(out_prob_old, batch_old[1])
                     self.loss_backward(loss)
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
 

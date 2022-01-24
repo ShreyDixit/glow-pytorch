@@ -381,7 +381,7 @@ class BioGlowReplay(nn.Module):
         self.intermediate_channels = self.Glow.flow.output_shapes[-self.Glow.flow.K-2][1]
 
         self.classifier = resnet18(pretrained=True)
-        self.classifier.fc = nn.Linear(2048, self.n_classes)
+        self.classifier.fc = nn.Linear(512, self.n_classes)
         self.classifier.conv1 = nn.Conv2d(self.intermediate_channels, 64, kernel_size=(1, 1), padding=(5, 5), bias=False)
 
     def forward(self, x):
