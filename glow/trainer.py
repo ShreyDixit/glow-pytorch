@@ -161,7 +161,10 @@ class Trainer(object):
     def gen_old_intermediate_ds(self):
         y_onehot = self.gen_y_one_hot_old()
         with torch.no_grad():
-            intermediate = self.graph.z_to_intermediate(None, y_onehot, 1)
+            if self.y_classes==2:
+                intermediate = torch.zeros_like(y_onehot)
+            else:
+                intermediate = self.graph.z_to_intermediate(None, y_onehot, 1).cpu().detach().requires_grad_(False)
         return TensorDataset(intermediate, y_onehot)
 
     def update_dataloader(self, n):
