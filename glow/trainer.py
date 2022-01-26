@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 import datetime
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
@@ -85,7 +86,7 @@ class Trainer(object):
                 self.update_dataloader(0)
                 
             for epoch in range(self.n_epoches):
-                print("epoch", epoch)
+                logger.info(f"epoch {epoch:0>4}")
                 progress = tqdm(self.data_loader)
                 for i_batch, (batch, batch_old) in enumerate(progress):
                     x, y, y_onehot = self.prepare_training(batch)
