@@ -133,13 +133,13 @@ class Trainer(object):
         return loss
 
     def save_checkpoint(self, batch, y_onehot, z, y_logits):
-        if self.global_step % self.checkpoints_gap == 0 and self.global_step > 0:
-            save(global_step=self.global_step,
-                        graph=self.graph,
-                        optim=self.optim,
-                        pkg_dir=self.checkpoints_dir,
-                        is_best=True,
-                        max_checkpoints=self.max_checkpoints)
+        # if self.global_step % self.checkpoints_gap == 0 and self.global_step > 0:
+        save(global_step=self.global_step,
+                    graph=self.graph,
+                    optim=self.optim,
+                    pkg_dir=self.checkpoints_dir,
+                    is_best=True,
+                    max_checkpoints=self.max_checkpoints)
         # if self.global_step % self.plot_gaps == 0:
         #     img = self.graph(z=z, y_onehot=y_onehot, reverse=True)
         #             # img = torch.clamp(img, min=0, max=1.0)
