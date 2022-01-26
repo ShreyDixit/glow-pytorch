@@ -4,6 +4,8 @@ import copy
 import torch
 import numpy as np
 import matplotlib
+from pathlib import Path
+from loguru import logger
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from shutil import copyfile
@@ -74,6 +76,7 @@ def _file_best():
 
 
 def save(global_step, graph, optim, criterion_dict=None, pkg_dir="", is_best=False, max_checkpoints=None):
+    logger.info(f"save function writing data to '{pkg_dir}' for global_step '{global_step}'")
     if optim is None:
         raise ValueError("cannot save without optimzier")
     state = {
