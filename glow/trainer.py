@@ -142,7 +142,12 @@ class Trainer(object):
                     is_best=True,
                     max_checkpoints=self.max_checkpoints)
         if self.global_step % self.plot_gaps == 0:
-            img = self.graph.Glow(z, eps_std=0.3, reverse=True, y_onehot=None)
+            img = self.graph.Glow(
+                z,
+                eps_std=0.3,
+                reverse=True,
+                y_onehot=F.one_hot(torch.randint(high=self.y_classes - 2, size=(len(z),)), self.y_classes)
+            )
                     # img = torch.clamp(img, min=0, max=1.0)
             if self.y_condition:
                 if self.y_criterion == "multi-classes":
