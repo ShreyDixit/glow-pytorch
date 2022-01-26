@@ -22,7 +22,7 @@ class MNISTIncremental(Dataset):
 
     def __getitem__(self, index):
         for i in range(self.num_classes):
-            if index > len(self.label_dict[i]):
+            if index >= len(self.label_dict[i]):
                 index -= len(self.label_dict[i])
 
             else:
