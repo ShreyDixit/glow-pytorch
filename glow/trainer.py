@@ -97,6 +97,7 @@ class Trainer(object):
                     # loss
                     loss = self.calculate_glow_loss(y, y_onehot, nll, y_logits)
                     self.loss_backward(loss)
+                    progress.set_postfix(loss=loss.item())
 
                 # checkpoints
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
@@ -110,9 +111,11 @@ class Trainer(object):
                     out_prob, nll = self.graph(x)
                     loss = Glow.loss_multi_classes(out_prob, y_onehot)
                     if stage>0:
-                        out_prob_old, nll_old = self.graph.intermediate_to_class(batch_old[0])
-                        loss += Glow.loss_multi_classes(out_prob_old, batch_old[1])
+                        out_prob_old = self.graph.intermediate_to_class(batch_old[0].to(self.data_device))
+                        loss += Glow.loss_multi_classes(out_prob_old, batch_old[1].to(self.data_device))
                     self.loss_backward(loss)
+                    progress.set_postfix(loss=loss.item())
+
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
 
             print(f"Training Accuracy with {self.y_classes} classes: {self.get_accuracy(True)}")
@@ -161,8 +164,8 @@ class Trainer(object):
                 y_true = y_onehot
             for bi in range(min([len(img), 4])):
                 self.writer.add_image("0_reverse/{}".format(bi), torch.cat((img[bi], batch["x"][bi]), dim=1), self.global_step)
-                if self.y_condition:
-                    self.writer.add_image("1_prob/{}".format(bi), plot_prob([y_pred[bi], y_true[bi]], ["pred", "true"]), self.global_step)
+                # if self.y_condition:
+                #     self.writer.add_image("1_prob/{}".format(bi), plot_prob([y_pred[bi], y_true[bi]], ["pred", "true"]), self.global_step)
 
     def gen_y_one_hot_old(self):
         if self.y_classes==2:
@@ -173,9 +176,9 @@ class Trainer(object):
         y_onehot = self.gen_y_one_hot_old()
         with torch.no_grad():
             if self.y_classes==2:
-                intermediate = torch.zeros_like(y_onehot)
+                intermediate = torch.zeros_like(y_onehot.to(self.data_device))
             else:
-                intermediate = self.graph.z_to_intermediate(None, y_onehot, 1).cpu().detach().requires_grad_(False)
+                intermediate = self.graph.z_to_intermediate(None, y_onehot.to(self.data_device), 1).cpu().detach().requires_grad_(False)
         return TensorDataset(intermediate, y_onehot)
 
     def update_dataloader(self, n):
@@ -248,6 +251,8 @@ class Trainer(object):
 
         correct = 0
         for batch in dl:
+            for k in batch:
+                batch[k] = batch[k].to(self.data_device)
             x = batch["x"]
             label = batch["y_onehot"]
             out = torch.argmax(self.graph(x)[0], 1)

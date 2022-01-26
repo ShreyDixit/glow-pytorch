@@ -221,16 +221,19 @@ class Glow(nn.Module):
         self.y_classes += n
 
     def add_neurons_ycond(self, n):
-        additional_weight = torch.zeros(n, self.project_class.weight.shape[1]) + self.project_class.weight.mean()
-        additional_bias = torch.zeros(n) + self.project_class.bias.mean()
-        additional_logs = torch.zeros(n) + self.project_class.logs.mean()
+        device = self.project_class.weight.device
+
+        additional_weight = torch.zeros(n, self.project_class.weight.shape[1]).to(device) + self.project_class.weight.mean()
+        additional_bias = torch.zeros(n).to(device) + self.project_class.bias.mean()
+        additional_logs = torch.zeros(n).to(device) + self.project_class.logs.mean()
 
         self.project_class.weight = nn.Parameter(torch.cat((self.project_class.weight, additional_weight)))
         self.project_class.bias = nn.Parameter(torch.cat((self.project_class.bias, additional_bias)))
         self.project_class.logs = nn.Parameter(torch.cat((self.project_class.logs, additional_logs)))
 
     def add_embedding_ycond(self, n):
-        weights = torch.cat((self.project_ycond.weight, torch.normal(0, 1, (n, self.project_ycond.weight.shape[1]))))
+        device = self.project_class.weight.device
+        weights = torch.cat((self.project_ycond.weight, torch.normal(0, 1, (n, self.project_ycond.weight.shape[1])).to(device)))
         self.project_ycond = nn.Embedding.from_pretrained(weights, freeze=False)
 
     def prior(self, y_onehot=None):
@@ -407,8 +410,9 @@ class BioGlowReplay(nn.Module):
         self.add_neurons_fc(n)
 
     def add_neurons_fc(self, n):
-        additional_weight = torch.zeros(n, self.classifier.fc.weight.shape[1]) + self.classifier.fc.weight.mean()
-        additional_bias = torch.zeros(n) + self.classifier.fc.bias.mean()
+        device = self.Glow.project_class.weight.device
+        additional_weight = torch.zeros(n, self.classifier.fc.weight.shape[1]).to(device) + self.classifier.fc.weight.mean()
+        additional_bias = torch.zeros(n).to(device) + self.classifier.fc.bias.mean()
 
         self.classifier.fc.weight = nn.Parameter(torch.cat((self.classifier.fc.weight, additional_weight)))
         self.classifier.fc.bias = nn.Parameter(torch.cat((self.classifier.fc.bias, additional_bias)))    
