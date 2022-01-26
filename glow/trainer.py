@@ -146,7 +146,7 @@ class Trainer(object):
                 z,
                 eps_std=0.3,
                 reverse=True,
-                y_onehot=F.one_hot(torch.randint(high=self.y_classes - 2, size=(len(z),)), self.y_classes)
+                y_onehot=F.one_hot(torch.randint(high=self.y_classes, size=(len(z),)), self.y_classes).to("cuda")
             )
                     # img = torch.clamp(img, min=0, max=1.0)
             if self.y_condition:
