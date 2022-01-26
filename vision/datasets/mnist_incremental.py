@@ -6,10 +6,10 @@ from torch.nn.functional import one_hot
 
 
 class MNISTIncremental(Dataset):
-    def __init__(self, root_dir, transform=None, num_classes=2):
+    def __init__(self, root_dir, transform=None, num_classes=2, train=True):
         self.num_classes = num_classes
         self.ds = torchvision.datasets.MNIST(
-            root=root_dir, train=True, download=True, transform=transform
+            root=root_dir, train=train, download=True, transform=transform
         )
 
         self.label_dict = defaultdict(list)

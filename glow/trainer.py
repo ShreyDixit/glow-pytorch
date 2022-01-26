@@ -16,7 +16,7 @@ from . import thops
 class Trainer(object):
     def __init__(self, graph, optim, lrschedule, loaded_step,
                  devices, data_device,
-                 dataset, hparams):
+                 dataset, hparams, dataset_test):
         if isinstance(hparams, str):
             hparams = JsonConfig(hparams)
         # set members
@@ -48,6 +48,7 @@ class Trainer(object):
         # number of training batches
         self.batch_size = hparams.Train.batch_size
         self.dataset = dataset
+        self.dataset_test = dataset_test
         self.data_loader = DataLoader(self.dataset,
                                       batch_size=self.batch_size,
                                     #   num_workers=8,
@@ -113,6 +114,8 @@ class Trainer(object):
                     self.loss_backward(loss)
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
 
+            print(f"Training Accuracy with {self.y_classes} classes: {self.get_accuracy(True)}")
+            print(f"Testing Accuracy with {self.y_classes} classes: {self.get_accuracy()}")
             self.global_step += 1
 
         self.writer.export_scalars_to_json(os.path.join(self.log_dir, "all_scalars.json"))
@@ -171,6 +174,7 @@ class Trainer(object):
 
     def update_dataloader(self, n):
         self.dataset.add_classes(n)
+        self.dataset_test.add_classes(n)
         self.y_classes += n
         old_ds = self.gen_old_intermediate_ds()
         new_old_ds = MergeOldNewDS(self.dataset, old_ds)
@@ -230,3 +234,19 @@ class Trainer(object):
         self.optim.step()
         self.optim.zero_grad()
         self.graph.zero_grad()
+
+    @torch.no_grad()
+    def get_accuracy(self, training=False):
+        ds = self.dataset if training else self.dataset_test
+        dl = DataLoader(ds, batch_size = self.batch_size)
+
+        correct = 0
+        for batch in dl:
+            x = batch["x"]
+            label = batch["y_onehot"]
+            out = torch.argmax(self.graph(x)[0], 1)
+            true= torch.argmax(label, 1)
+            correct += (out==true).sum().item()
+
+        return correct/len(ds)
+        
