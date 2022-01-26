@@ -141,20 +141,20 @@ class Trainer(object):
                     pkg_dir=self.checkpoints_dir,
                     is_best=True,
                     max_checkpoints=self.max_checkpoints)
-        # if self.global_step % self.plot_gaps == 0:
-        #     img = self.graph(z=z, y_onehot=y_onehot, reverse=True)
-        #             # img = torch.clamp(img, min=0, max=1.0)
-        #     if self.y_condition:
-        #         if self.y_criterion == "multi-classes":
-        #             y_pred = torch.sigmoid(y_logits)
-        #         elif self.y_criterion == "single-class":
-        #             y_pred = thops.onehot(torch.argmax(F.softmax(y_logits, dim=1), dim=1, keepdim=True),
-        #                                         self.y_classes)
-        #         y_true = y_onehot
-        #     for bi in range(min([len(img), 4])):
-        #         self.writer.add_image("0_reverse/{}".format(bi), torch.cat((img[bi], batch["x"][bi]), dim=1), self.global_step)
-        #         if self.y_condition:
-        #             self.writer.add_image("1_prob/{}".format(bi), plot_prob([y_pred[bi], y_true[bi]], ["pred", "true"]), self.global_step)
+        if self.global_step % self.plot_gaps == 0:
+            img = self.graph.Glow(z, eps_std=0.3, reverse=True, y_onehot=None)
+                    # img = torch.clamp(img, min=0, max=1.0)
+            if self.y_condition:
+                if self.y_criterion == "multi-classes":
+                    y_pred = torch.sigmoid(y_logits)
+                elif self.y_criterion == "single-class":
+                    y_pred = thops.onehot(torch.argmax(F.softmax(y_logits, dim=1), dim=1, keepdim=True),
+                                                self.y_classes)
+                y_true = y_onehot
+            for bi in range(min([len(img), 4])):
+                self.writer.add_image("0_reverse/{}".format(bi), torch.cat((img[bi], batch["x"][bi]), dim=1), self.global_step)
+                if self.y_condition:
+                    self.writer.add_image("1_prob/{}".format(bi), plot_prob([y_pred[bi], y_true[bi]], ["pred", "true"]), self.global_step)
 
     def gen_y_one_hot_old(self):
         if self.y_classes==2:
