@@ -57,7 +57,7 @@ class Trainer(object):
                                       drop_last=True)
         self.n_epoches = (hparams.Train.num_batches+len(self.data_loader)-1)
         self.n_epoches = self.n_epoches // len(self.data_loader)
-        self.global_step = 0
+        self.global_digit = 0
         # lr schedule
         self.lrschedule = lrschedule
         self.loaded_step = loaded_step
@@ -77,7 +77,7 @@ class Trainer(object):
     def train(self):
         # set to training state
         self.graph.train()
-        self.global_step = self.loaded_step
+        self.global_digit = self.loaded_step
         # begin to train
         for stage in range(4):
             if stage>0:
@@ -85,6 +85,8 @@ class Trainer(object):
                 self.graph.add_classes(2)
             else:
                 self.update_dataloader(0)
+
+            self.stage_step = 0
                 
             for epoch in range(self.n_epoches):
                 logger.info(f"epoch {epoch:0>4}")
@@ -98,6 +100,7 @@ class Trainer(object):
                     loss = self.calculate_glow_loss(y, y_onehot, nll, y_logits)
                     self.loss_backward(loss)
                     progress.set_postfix(loss=loss.item())
+                    self.stage_step += 1
 
                 # checkpoints
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
@@ -115,12 +118,13 @@ class Trainer(object):
                         loss += Glow.loss_multi_classes(out_prob_old, batch_old[1].to(self.data_device))
                     self.loss_backward(loss)
                     progress.set_postfix(loss=loss.item())
+                    self.stage_step += 1
 
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
 
             print(f"Training Accuracy with {self.y_classes} classes: {self.get_accuracy(True)}")
             print(f"Testing Accuracy with {self.y_classes} classes: {self.get_accuracy()}")
-            self.global_step += 1
+            self.global_digit += 1
 
         self.writer.export_scalars_to_json(os.path.join(self.log_dir, "all_scalars.json"))
         self.writer.close()
@@ -132,22 +136,22 @@ class Trainer(object):
             loss_classes = (Glow.loss_multi_classes(y_logits, y_onehot)
                                         if self.y_criterion == "multi-classes" else
                                         Glow.loss_class(y_logits, y))
-        if self.global_step % self.scalar_log_gaps == 0:
-            self.writer.add_scalar("loss/loss_generative", loss_generative, self.global_step)
+        if self.global_digit % self.scalar_log_gaps == 0:
+            self.writer.add_scalar(f"loss/loss_generative_{self.global_digit}", loss_generative, self.stage_step)
             if self.y_condition:
-                self.writer.add_scalar("loss/loss_classes", loss_classes, self.global_step)
+                self.writer.add_scalar(f"loss/loss_classes_{self.global_digit}", loss_classes, self.stage_step)
         loss = loss_generative + loss_classes * self.weight_y
         return loss
 
     def save_checkpoint(self, batch, y_onehot, z, y_logits):
         # if self.global_step % self.checkpoints_gap == 0 and self.global_step > 0:
-        save(global_step=self.global_step,
-                    graph=self.graph,
-                    optim=self.optim,
-                    pkg_dir=self.checkpoints_dir,
-                    is_best=True,
-                    max_checkpoints=self.max_checkpoints)
-        if self.global_step % self.plot_gaps == 0:
+        save(global_step=self.global_digit,
+             graph=self.graph,
+             optim=self.optim,
+             pkg_dir=self.checkpoints_dir,
+             is_best=True,
+             max_checkpoints=self.max_checkpoints)
+        if self.global_digit % self.plot_gaps == 0:
             img = self.graph.Glow(
                 z,
                 eps_std=0.3,
@@ -163,7 +167,7 @@ class Trainer(object):
                                                 self.y_classes)
                 y_true = y_onehot
             for bi in range(min([len(img), 4])):
-                self.writer.add_image("0_reverse/{}".format(bi), torch.cat((img[bi], batch["x"][bi]), dim=1), self.global_step)
+                self.writer.add_image(f"{self.global_digit}_reverse/{bi}", torch.cat((img[bi], batch["x"][bi]), dim=1), self.stage_step)
                 # if self.y_condition:
                 #     self.writer.add_image("1_prob/{}".format(bi), plot_prob([y_pred[bi], y_true[bi]], ["pred", "true"]), self.global_step)
 
@@ -195,13 +199,13 @@ class Trainer(object):
 
     def prepare_training(self, batch):
         # update learning rate
-        lr = self.lrschedule["func"](global_step=self.global_step,
-                                                **self.lrschedule["args"])
+        lr = self.lrschedule["func"](global_step=self.global_digit,
+                                     **self.lrschedule["args"])
         for param_group in self.optim.param_groups:
             param_group['lr'] = lr
         self.optim.zero_grad()
-        if self.global_step % self.scalar_log_gaps == 0:
-            self.writer.add_scalar("lr/lr", lr, self.global_step)
+        if self.global_digit % self.scalar_log_gaps == 0:
+            self.writer.add_scalar("lr/lr", lr, self.global_digit)
                     # get batch data
         for k in batch:
             batch[k] = batch[k].to(self.data_device)
@@ -218,7 +222,7 @@ class Trainer(object):
                 y_onehot = thops.onehot(y, num_classes=self.y_classes)
 
                     # at first time, initialize ActNorm
-        if self.global_step == 0:
+        if self.global_digit == 0:
             self.graph.Glow(x[:self.batch_size // len(self.devices), ...],
                                 y_onehot[:self.batch_size // len(self.devices), ...] if y_onehot is not None else None)
                     # parallel
@@ -237,8 +241,8 @@ class Trainer(object):
             torch.nn.utils.clip_grad_value_(self.graph.parameters(), self.max_grad_clip)
         if self.max_grad_norm is not None and self.max_grad_norm > 0:
             grad_norm = torch.nn.utils.clip_grad_norm_(self.graph.parameters(), self.max_grad_norm)
-            if self.global_step % self.scalar_log_gaps == 0:
-                self.writer.add_scalar("grad_norm/grad_norm", grad_norm, self.global_step)
+            if self.global_digit % self.scalar_log_gaps == 0:
+                self.writer.add_scalar("grad_norm/grad_norm", grad_norm, self.global_digit)
                     # step
         self.optim.step()
         self.optim.zero_grad()

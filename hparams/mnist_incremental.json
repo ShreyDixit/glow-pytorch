@@ -6,7 +6,7 @@
         "image_shape": [32, 32, 1],
         "hidden_channels": 512,
         "K": 8,
-        "L": 2,
+        "L": 16,
         "actnorm_scale": 1.0,
         "flow_permutation": "invconv",
         "flow_coupling": "affine",
@@ -42,7 +42,7 @@
     },
     "Train": {
         "batch_size": 256,
-        "num_batches": 10000,
+        "num_batches": 1000,
         "max_grad_clip": 5,
         "max_grad_norm": 100,
         "max_checkpoints": 20,
