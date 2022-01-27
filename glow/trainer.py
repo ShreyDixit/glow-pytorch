@@ -242,7 +242,7 @@ class Trainer(object):
         if self.max_grad_norm is not None and self.max_grad_norm > 0:
             grad_norm = torch.nn.utils.clip_grad_norm_(self.graph.parameters(), self.max_grad_norm)
             if self.global_digit % self.scalar_log_gaps == 0:
-                self.writer.add_scalar("grad_norm/grad_norm", grad_norm, self.global_digit)
+                self.writer.add_scalar(f"grad_norm/grad_norm_{self.global_digit}", grad_norm, self.stage_step)
                     # step
         self.optim.step()
         self.optim.zero_grad()
