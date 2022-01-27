@@ -102,6 +102,9 @@ class Trainer(object):
                     progress.set_postfix(loss=loss.item())
                     self.stage_step += 1
 
+                self.writer.add_scalar(f"accuracy/training_{self.global_digit}", self.get_accuracy(True), self.stage_step)
+                self.writer.add_scalar(f"accuracy/testing_{self.global_digit}", self.get_accuracy(), self.stage_step)
+
                 # checkpoints
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
                 
@@ -122,8 +125,9 @@ class Trainer(object):
 
                 self.save_checkpoint(batch, y_onehot, z, y_logits)
 
-            print(f"Training Accuracy with {self.y_classes} classes: {self.get_accuracy(True)}")
-            print(f"Testing Accuracy with {self.y_classes} classes: {self.get_accuracy()}")
+                self.writer.add_scalar(f"accuracy/training_{self.global_digit}", self.get_accuracy(True), self.stage_step)
+                self.writer.add_scalar(f"accuracy/testing_{self.global_digit}", self.get_accuracy(), self.stage_step)
+
             self.global_digit += 1
 
         self.writer.export_scalars_to_json(os.path.join(self.log_dir, "all_scalars.json"))
