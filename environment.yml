@@ -1,0 +1,14 @@
+name: bai
+channels:
+  - anaconda
+dependencies:
+  - python==3.9
+  - pytorch
+  - docopt
+  - loguru
+  - matplotlib
+  - scipy
+  - tensorboardX
+  - tensorflow
+  - tqdm
+  - torchvision

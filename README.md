@@ -7,9 +7,8 @@ Shrey Dixit, Daniel Speck
 Using anaconda:
 
 ```
-conda create --name "bai" python=3.9
+conda env create --file environment.yml
 conda activate bai
-conda install --file requirements.txt
 ```
 
 ## Run Training
