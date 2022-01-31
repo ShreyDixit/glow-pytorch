@@ -3,6 +3,8 @@
 results/
 celeba_z_25k/
 pictures/infer/
+*.ipynb
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

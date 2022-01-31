@@ -4,7 +4,7 @@ import torch
 from collections import defaultdict
 from . import learning_rate_schedule
 from .config import JsonConfig
-from .models import Glow
+from .models import BioGlowReplay
 from .utils import load, save, get_proper_device
 
 
@@ -26,7 +26,7 @@ def build(hparams, is_training):
     get_loss = None
     # 1. build graph and criterion_dict, (on cpu)
     # build and append `device attr` to graph
-    graph = Glow(hparams)
+    graph = BioGlowReplay(hparams)
     graph.device = hparams.Device.glow
     if graph is not None:
         # get device

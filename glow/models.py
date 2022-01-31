@@ -7,6 +7,7 @@ from . import thops
 from . import modules
 from . import utils
 
+from torchvision.models import resnet18
 
 def f(in_channels, out_channels, hidden_channels):
     return nn.Sequential(
@@ -156,8 +157,21 @@ class FlowNet(nn.Module):
             z, logdet = layer(z, logdet, reverse=False)
         return z, logdet
 
+    def encode_intermediate(self, z, logdet=0.0):
+        for layer, shape in zip(self.layers[:-self.K - 1], self.output_shapes[:-self.K - 1]):
+            z, logdet = layer(z, logdet, reverse=False)
+        return z, logdet
+
     def decode(self, z, eps_std=None):
         for layer in reversed(self.layers):
+            if isinstance(layer, modules.Split2d):
+                z, logdet = layer(z, logdet=0, reverse=True, eps_std=eps_std)
+            else:
+                z, logdet = layer(z, logdet=0, reverse=True)
+        return z
+
+    def decode_intermediate(self, z, eps_std=None):
+        for layer in reversed(self.layers[-self.K - 1:]):
             if isinstance(layer, modules.Split2d):
                 z, logdet = layer(z, logdet=0, reverse=True, eps_std=eps_std)
             else:
@@ -187,8 +201,7 @@ class Glow(nn.Module):
             self.learn_top = modules.Conv2dZeros(C * 2, C * 2)
         if hparams.Glow.y_condition:
             C = self.flow.output_shapes[-1][1]
-            self.project_ycond = modules.LinearZeros(
-                hparams.Glow.y_classes, 2 * C)
+            self.project_ycond = nn.Embedding(self.y_classes, 2 * C)
             self.project_class = modules.LinearZeros(
                 C, hparams.Glow.y_classes)
         # register prior hidden
@@ -201,6 +214,28 @@ class Glow(nn.Module):
                                       self.flow.output_shapes[-1][2],
                                       self.flow.output_shapes[-1][3]])))
 
+    @torch.no_grad()
+    def add_classes(self, n):
+        self.add_embedding_ycond(n)
+        self.add_neurons_ycond(n)
+        self.y_classes += n
+
+    def add_neurons_ycond(self, n):
+        device = self.project_class.weight.device
+
+        additional_weight = torch.zeros(n, self.project_class.weight.shape[1]).to(device) + self.project_class.weight.mean()
+        additional_bias = torch.zeros(n).to(device) + self.project_class.bias.mean()
+        additional_logs = torch.zeros(n).to(device) + self.project_class.logs.mean()
+
+        self.project_class.weight = nn.Parameter(torch.cat((self.project_class.weight, additional_weight)))
+        self.project_class.bias = nn.Parameter(torch.cat((self.project_class.bias, additional_bias)))
+        self.project_class.logs = nn.Parameter(torch.cat((self.project_class.logs, additional_logs)))
+
+    def add_embedding_ycond(self, n):
+        device = self.project_class.weight.device
+        weights = torch.cat((self.project_ycond.weight, torch.normal(0, 1, (n, self.project_ycond.weight.shape[1])).to(device)))
+        self.project_ycond = nn.Embedding.from_pretrained(weights, freeze=False)
+
     def prior(self, y_onehot=None):
         B, C = self.prior_h.size(0), self.prior_h.size(1)
         h = self.prior_h.detach().clone()
@@ -209,8 +244,8 @@ class Glow(nn.Module):
             h = self.learn_top(h)
         if self.hparams.Glow.y_condition:
             assert y_onehot is not None
-            yp = self.project_ycond(y_onehot).view(B, C, 1, 1)
-            h += yp
+            yp = self.project_ycond(y_onehot.argmax(dim=1)).view(-1, C, 1, 1)
+            h = yp+h if yp.shape[0]==h.shape[0] else yp
         return thops.split_feature(h, "split")
 
     def forward(self, x=None, y_onehot=None, z=None,
@@ -240,6 +275,25 @@ class Glow(nn.Module):
         # return
         nll = (-objective) / float(np.log(2.) * pixels)
         return z, nll, y_logits
+
+    def image_to_intermediate(self, x):
+        pixels = thops.pixels(x)
+        z = x + torch.normal(mean=torch.zeros_like(x),
+                             std=torch.ones_like(x) * (1. / 256.))
+        logdet = torch.zeros_like(x[:, 0, 0, 0])
+        logdet += float(-np.log(256.) * pixels)
+        # encode
+        z, objective = self.flow.encode_intermediate(z, logdet=logdet)
+        nll = (-objective) / float(np.log(2.) * pixels)
+        return z, nll
+
+    def z_to_intermediate(self, z, y_onehot, eps_std):
+        with torch.no_grad():
+            mean, logs = self.prior(y_onehot)
+            if z is None:
+                z = modules.GaussianDiag.sample(mean, logs, eps_std)
+            x = self.flow.decode_intermediate(z, eps_std=eps_std)
+        return x
 
     def reverse_flow(self, z, y_onehot, eps_std):
         with torch.no_grad():
@@ -320,3 +374,46 @@ class Glow(nn.Module):
             return 0
         else:
             return Glow.CE(y_logits, y.long())
+
+class BioGlowReplay(nn.Module):
+    def __init__(self, hparams):
+        super().__init__()
+        self.Glow = Glow(hparams)
+
+        self.n_classes = hparams.Glow.y_classes
+        self.intermediate_channels = self.Glow.flow.output_shapes[-self.Glow.flow.K-2][1]
+
+        self.classifier = resnet18(pretrained=True)
+        self.classifier.fc = nn.Linear(512, self.n_classes)
+        self.classifier.conv1 = nn.Conv2d(self.intermediate_channels, 64, kernel_size=(1, 1), padding=(5, 5), bias=False)
+
+    def forward(self, x):
+        with torch.no_grad():
+            intermediate, nll = self.Glow.image_to_intermediate(x)
+        return self.classifier(intermediate), nll
+
+    def image_to_z(self, x, y_onehot):
+        return self.Glow.normal_flow(x, y_onehot)
+
+    def image_to_intermediate(self, x):
+        return self.Glow.image_to_intermediate(x)
+
+    def z_to_intermediate(self, z, y_onehot, eps_std):
+        return self.Glow.z_to_intermediate(z, y_onehot, eps_std)
+
+    def intermediate_to_class(self, intermediate):
+        return self.classifier(intermediate)
+
+    @torch.no_grad()
+    def add_classes(self, n):
+        self.Glow.add_classes(n)
+        self.add_neurons_fc(n)
+
+    def add_neurons_fc(self, n):
+        device = self.Glow.project_class.weight.device
+        additional_weight = torch.zeros(n, self.classifier.fc.weight.shape[1]).to(device) + self.classifier.fc.weight.mean()
+        additional_bias = torch.zeros(n).to(device) + self.classifier.fc.bias.mean()
+
+        self.classifier.fc.weight = nn.Parameter(torch.cat((self.classifier.fc.weight, additional_weight)))
+        self.classifier.fc.bias = nn.Parameter(torch.cat((self.classifier.fc.bias, additional_bias)))    
+    

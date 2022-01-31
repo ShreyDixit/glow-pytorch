@@ -31,7 +31,8 @@ if __name__ == "__main__":
         transforms.ToTensor()])
     # build graph and dataset
     built = build(hparams, True)
-    dataset = dataset(dataset_root, transform=transform)
+    dataset_train = dataset(dataset_root, transform=transform, num_classes=hparams.Glow.y_classes)
+    dataset_test = dataset(dataset_root, transform=transform, num_classes=hparams.Glow.y_classes, train=False)
     # begin to train
-    trainer = Trainer(**built, dataset=dataset, hparams=hparams)
+    trainer = Trainer(**built, dataset=dataset_train, hparams=hparams, dataset_test=dataset_test)
     trainer.train()
