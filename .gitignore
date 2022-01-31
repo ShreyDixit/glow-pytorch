@@ -4,6 +4,7 @@ results/
 celeba_z_25k/
 pictures/infer/
 *.ipynb
+*.pt
 
 
 # Byte-compiled / optimized / DLL files
