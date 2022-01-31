@@ -17,3 +17,7 @@ conda install --file requirements.txt
 ```
 python train.py hparams/mnist_incremental.json mnist_incremental data
 ```
+
+## Architecture
+
+![architecture sketch](architecture.jpeg)
